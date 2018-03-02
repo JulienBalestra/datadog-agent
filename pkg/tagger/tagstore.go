@@ -2,6 +2,7 @@ package tagger
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	log "github.com/cihub/seelog"
@@ -133,17 +134,43 @@ func (e *entityTags) get(highCard bool) ([]string, []string) {
 	// Cache miss
 	var arrays [][]string
 	var sources []string
+	source2tags := make(map[string][]string)
+	tag2source := make(map[string]string)
 	lowCardCount := 0
 
 	for source, tags := range e.lowCardTags {
 		arrays = append(arrays, tags)
 		lowCardCount += len(tags)
 		sources = append(sources, source)
+		source2tags[source] = append(source2tags[source], tags...)
 	}
-	for _, tags := range e.highCardTags {
+	for source, tags := range e.highCardTags {
 		arrays = append(arrays, tags)
+		source2tags[source] = append(source2tags[source], tags...)
 	}
+
 	tags := utils.ConcatenateTags(arrays)
+
+	// ResolveTagPriorities resolves tag duplication with collector priority
+	for source, tags := range source2tags {
+		delete(source2tags, source)
+		priority := collectors.CollectorPriorities[source]
+		for _, tag := range tags {
+			tagName := strings.Split(tag, ":")[0]
+			if originalSource, ok := tag2source[tagName]; ok {
+				if priority < collectors.CollectorPriorities[originalSource] {
+					continue
+				}
+			}
+			tag2source[tagName] = source
+		}
+	}
+
+	// Convert back deduplicated map to a slice
+	tags = []string{}
+	for _, tag := range tag2source {
+		tags = append(tags, tag)
+	}
 
 	// Write cache
 	e.RUnlock()

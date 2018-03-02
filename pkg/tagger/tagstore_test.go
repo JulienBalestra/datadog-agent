@@ -187,3 +187,34 @@ func TestGetEntityTags(t *testing.T) {
 	assert.Contains(t, tags, "low1", "low2")
 	assert.Len(t, sources, 1)
 }
+
+func TestDuplicateSourceTags(t *testing.T) {
+	etags := entityTags{
+		lowCardTags:  make(map[string][]string),
+		highCardTags: make(map[string][]string),
+		cacheValid:   false,
+	}
+	assert.False(t, etags.cacheValid)
+
+	// Get empty tags and make sure cache is now set to valid
+	tags, sources := etags.get(true)
+	assert.Len(t, tags, 0)
+	assert.Len(t, sources, 0)
+	assert.True(t, etags.cacheValid)
+
+	// Add tags but don't invalidate the cache, we should return empty arrays
+	etags.lowCardTags["source1"] = []string{"foo", "tag1:source1", "tag2:source1"}
+	etags.lowCardTags["source2"] = []string{"bar", "tag1:source2", "tag2:source2"}
+	tags, sources = etags.get(true)
+	assert.Len(t, tags, 0)
+	assert.Len(t, sources, 0)
+	assert.True(t, etags.cacheValid)
+
+	// Invalidate the cache, we should now get the tags
+	etags.cacheValid = false
+	tags, sources = etags.get(true)
+	assert.Len(t, tags, 4)
+	assert.Contains(t, tags, "foo", "bar", "tag1:source1", "tag2:source1")
+	assert.Len(t, sources, 2)
+	assert.True(t, etags.cacheValid)
+}
